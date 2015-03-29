@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+  <comment>Configuration file</comment>
+  <entry key="excelfile">LoadExample.xlsx</entry>
+  <entry key="username">scott</entry>
+  <entry key="password">tiger</entry>
+  <entry key="update-file">true</entry>
+  <entry key="environment">DEVEL</entry>
+  <entry key="endpoint-TEST">http://10.12.0.50:4400/services/xxcust/LoadInvoices_ep</entry>
+  <entry key="endpoint-DEVEL">http://10.10.0.50:4400/services/xxcust/LoadInvoices_ep</entry>
+  <entry key="endpoint-PROD">http://10.99.0.50:4400/services/xxcust/LoadInvoices_ep</entry>
+  <!--END-->
+  <entry key="info-transform">transform-info.xsl</entry>
+  <entry key="header-transform">transform-header.xsl</entry>
+  <entry key="body-transform">transform-to-request.xsl</entry>
+  <entry key="result-transform">transform-result.xsl</entry>
+  <entry key="debug">true</entry>
+  <entry key="debug-file">log.txt</entry>
+</properties>
