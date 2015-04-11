@@ -17,7 +17,6 @@ import java.math.BigDecimal;
 
 import java.util.Enumeration;
 import java.util.Properties;
-
 import java.util.UUID;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -31,7 +30,6 @@ import javax.xml.soap.SOAPHeader;
 import javax.xml.soap.SOAPMessage;
 import javax.xml.soap.SOAPPart;
 import javax.xml.transform.OutputKeys;
-import javax.xml.transform.Result;
 import javax.xml.transform.Source;
 import javax.xml.transform.Transformer;
 import javax.xml.transform.TransformerException;
@@ -70,6 +68,7 @@ public class Excel2WS {
 
     public static void streamDOMSource(Source ds,
                                        StreamResult sr) throws TransformerException {
+        //TransformerFactory tf = TransformerFactory.newInstance();
         Transformer transformer =
             TransformerFactory.newInstance().newTransformer();
         transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes");
@@ -126,6 +125,8 @@ public class Excel2WS {
         switch (c.getCellType()) {
         case Cell.CELL_TYPE_NUMERIC:
             return (new BigDecimal(c.getNumericCellValue())).toString();
+        case Cell.CELL_TYPE_BOOLEAN:
+            return c.getBooleanCellValue()?"true":"false";
         case Cell.CELL_TYPE_STRING:
             return c.getStringCellValue();
             //break;
@@ -200,7 +201,7 @@ public class Excel2WS {
         debugOut.println("env="+env);
         ep = nvl(prop.getProperty("endpoint-"+env), prop.getProperty("endpoint"));
 
-        myAssert(ep != null, "Config: endpoint can not be empty");
+        myAssert(ep != null, "Config: environment and/or endpoint must be defined empty");
         debugOut.println("Endpoint: " + ep);
 
         DocumentBuilderFactory docFactory =
@@ -216,21 +217,24 @@ public class Excel2WS {
 
         for (int i = 0; i <= sheet.getLastRowNum(); i++) {
             XSSFRow r = sheet.getRow(i);
+            //System.out.println("Processing: " + r.getCell(2));
             
             prop.setProperty("rownum", Integer.toString(i));
             Document doc = buildRowDoc(docBuilder, r, prop);
             StringWriter inf = new StringWriter();
-
+            //printXMLDocument(doc, System.out);
             infoTransform.transform(new DOMSource(doc), new StreamResult(inf));
             String infoStr = inf.toString();
 
             if (!"".equals(infoStr)) {
                 System.out.print("Row "+(i+1)+": "+infoStr+": ");
+                //System.out.print("Processing: " + r.getCell(2) + " = ");
                 debugOut.println((i+1)+": "+infoStr);
                 
 
 
                 if (isDebug) {
+                    //System.out.println(xmlToString(doc));
                     printXMLDocument(doc, debugOut);
                     DOMResult dr = new DOMResult();
                     // StreamResult sr =  new StreamResult(new OutputStreamWriter(System.out, "UTF-8"));
@@ -271,18 +275,27 @@ public class Excel2WS {
                     if (isDebug) {
                         printXMLDocument(res, debugOut);
                     }
-                    NodeList cols = res.getDocumentElement().getChildNodes();
-                    for (int k = 0; k < cols.getLength(); k++) {
-                        Node cx = cols.item(k);
-                        int colnr =
-                            Integer.parseInt(cx.getAttributes().getNamedItem("col").getTextContent());
-                        setOrCreateCell(r, colnr, cx.getTextContent());
+                    //setOrCreateCell(r, 0, "ok");
+                    //printXMLDocument(res, System.out);
+
+                    if (res != null && res.getDocumentElement() != null) {
+                        NodeList cols =
+                            res.getDocumentElement().getChildNodes();
+                        for (int k = 0; k < cols.getLength(); k++) {
+                            Node cx = cols.item(k);
+                            int colnr =
+                                Integer.parseInt(cx.getAttributes().getNamedItem("col").getTextContent());
+                            setOrCreateCell(r, colnr, cx.getTextContent());
+                        }
+                    } else {
+                        setOrCreateCell(r, 0, "ERROR");
+                        setOrCreateCell(r, 1, "Result after transformation is empty, check logs");
                     }
                 } catch (Exception e) {
                     e.printStackTrace(System.out);
                     System.out.println(e.getLocalizedMessage());
-                    setOrCreateCell(r, 0, "ERROR"); // these are hardcoded, sorry
-                    setOrCreateCell(r, 1, e.getLocalizedMessage()); // currently hardcoded, sorry
+                    setOrCreateCell(r, 0, "ERROR");
+                    setOrCreateCell(r, 1, e.getLocalizedMessage());
                 }
             }
         }
@@ -290,6 +303,7 @@ public class Excel2WS {
 
     public static void main(String[] args) throws Exception {
         //ExcelImport excelImport = new ExcelImport();
+        System.out.println("excelwsload by jramb");
         String filename;
         Properties prop = new Properties();
         ClassLoader classLoader = Excel2WS.class.getClassLoader();
@@ -298,15 +312,26 @@ public class Excel2WS {
 
         myAssert(config != null,
                  "Could not find config.xml in path, I need that!");
+        //prop.load(config);  // if config.properties
         prop.loadFromXML(config);
+        //properties.load(Class.getClassLoader().getResourceAsStream("config.properties"));
 
-        // some nice-to-have dynamic values, use them in the stylesheet convertions as needed 
+        //config = classLoader.getResourceAsStream("config.xml"); // reopen necessary
+        //Document confXML =  DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(config);
+        //printXMLDocument(confXML, System.out);
         prop.setProperty("now",
                          new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date()));
-        // todo: add time?
         prop.setProperty("uuid", UUID.randomUUID().toString());
 
-        for (int i = 0; i < args.length; i++) {
+        int i=0;
+        if(args.length>0) {
+            File f = new File(args[i]);
+            if (f.exists()) {
+                prop.setProperty("excelfile", f.getName());
+                i++;
+            }
+        }
+        for (/*int i = 0*/; i < args.length; i++) {
             String[] v = args[i].split("=");
             if (v.length == 2) {
                 prop.setProperty(v[0], v[1]);
@@ -319,9 +344,12 @@ public class Excel2WS {
         myAssert(xlsx.canWrite(), "File not writeable: " + xlsx.getName());
 
         XSSFWorkbook x = new XSSFWorkbook(new FileInputStream(xlsx));
+
+        loadOverrideProperties(x.getSheetAt(1), prop);
+
         // make sure we can write the file by... writing it
         boolean updateFile = !"false".equals(prop.getProperty("update-file"));
-
+    
         try {
             if (updateFile) {
                 x.write(new FileOutputStream(xlsx));
@@ -341,5 +369,23 @@ public class Excel2WS {
             }
         }
         System.out.println("Done.");
+    }
+
+    private static void loadOverrideProperties(XSSFSheet sheet,
+                                               Properties prop) {
+        if(sheet == null) {
+            return;
+        }
+        for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+            XSSFRow r = sheet.getRow(i);
+            if (r != null) {
+                String k = getCell(r, 0);
+                String v = getCell(r, 1);
+                if(!"".equals(k)) {
+                    prop.setProperty(k, v);
+                    //System.out.println(k+" = "+v);
+                }
+            }
+        }
     }
 }
