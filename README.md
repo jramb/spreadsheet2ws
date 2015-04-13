@@ -84,6 +84,5 @@ Jörg Ramb
 
 ## TODO
 
-* Make this a Maven project or fix the compile/dependencies somehow nice.
 * Do we need parallel execution?
 
