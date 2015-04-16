@@ -310,15 +310,15 @@ public class Excel2WS {
         InputStream config =
             classLoader.getResourceAsStream("config.xml"); // config.properties?
 
-        myAssert(config != null,
-                 "Could not find config.xml in path, I need that!");
-        //prop.load(config);  // if config.properties
-        prop.loadFromXML(config);
-        //properties.load(Class.getClassLoader().getResourceAsStream("config.properties"));
+        //myAssert(config != null, "Could not find config.xml in path, I need that!");
+        if(config!=null) {
+          prop.loadFromXML(config);
+        } else {
+          System.err.println("config.xml not loaded from path");
+        }
 
-        //config = classLoader.getResourceAsStream("config.xml"); // reopen necessary
-        //Document confXML =  DocumentBuilderFactory.newInstance().newDocumentBuilder().parse(config);
-        //printXMLDocument(confXML, System.out);
+        //prop.load(config);  // if config.properties
+
         prop.setProperty("now",
                          new java.text.SimpleDateFormat("yyyy-MM-dd").format(new java.util.Date()));
         prop.setProperty("uuid", UUID.randomUUID().toString());
@@ -331,12 +331,7 @@ public class Excel2WS {
                 i++;
             }
         }
-        for (/*int i = 0*/; i < args.length; i++) {
-            String[] v = args[i].split("=");
-            if (v.length == 2) {
-                prop.setProperty(v[0], v[1]);
-            }
-        }
+
         filename = prop.getProperty("excelfile");
         System.out.println("Starting spreadsheet processing: " + filename);
         File xlsx = new File(filename);
@@ -346,6 +341,14 @@ public class Excel2WS {
         XSSFWorkbook x = new XSSFWorkbook(new FileInputStream(xlsx));
 
         loadOverrideProperties(x.getSheetAt(1), prop);
+
+        // apply args, override all
+        for (/*int i = 0*/; i < args.length; i++) {
+            String[] v = args[i].split("=");
+            if (v.length == 2) {
+                prop.setProperty(v[0], v[1]);
+            }
+        }
 
         // make sure we can write the file by... writing it
         boolean updateFile = !"false".equals(prop.getProperty("update-file"));
