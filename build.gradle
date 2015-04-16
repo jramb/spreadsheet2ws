@@ -1,0 +1,29 @@
+apply plugin: 'java'
+apply plugin: 'maven'
+apply plugin: 'application'
+
+group = 'net.nogui.tools'
+version = '1.0'
+
+description = "Spreadsheet2WS"
+mainClassName = "xxcusst.spread2ws.Excel2WS"
+
+/*sourceCompatibility = 1.5*/
+/*targetCompatibility = 1.5*/
+
+
+
+repositories {
+     maven { url "http://repo.maven.apache.org/maven2" }
+}
+
+dependencies {
+    compile group: 'org.apache.poi', name: 'poi-ooxml', version:'3.11'
+}
+
+jar {
+  manifest {
+    attributes 'Main-Class': mainClassName,
+               'Implementation-Version': version
+  }
+}
