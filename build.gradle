@@ -1,7 +1,7 @@
-/*apply plugin: 'java'*/
 apply plugin: 'groovy'
 apply plugin: 'maven'
 apply plugin: 'application'
+apply plugin: 'idea'
 
 group = 'net.nogui.tools'
 version = '1.1'
@@ -20,6 +20,32 @@ repositories {
 dependencies {
     compile group: 'org.apache.poi', name: 'poi-ooxml', version:'3.11'
     compile 'org.codehaus.groovy:groovy-all:2.4.0'
+}
+
+/*
+sourceSets {
+    main {
+        java {
+            srcDir 'src/java'
+        }
+        resources {
+            srcDir 'setup'
+        }
+    }
+}
+*/
+
+startScripts {
+  classpath += files('../setup')
+}
+
+distributions {
+    main {
+        baseName = 'spreadsheet2ws'
+        contents {
+            from { 'LoadExample.xlsx' }
+        }
+    }
 }
 
 jar {
