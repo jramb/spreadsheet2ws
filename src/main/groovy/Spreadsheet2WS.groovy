@@ -1,7 +1,8 @@
-//package xxcust.spread2ws
 /*
  * 2014-2015 by J Ramb, Navigate Consulting
  */
+import groovy.transform.CompileStatic
+import groovy.transform.TypeChecked
 
 import javax.xml.parsers.DocumentBuilder
 import javax.xml.parsers.DocumentBuilderFactory
@@ -36,7 +37,7 @@ import org.w3c.dom.NodeList
 import org.w3c.dom.Text
 
 
-def myAssert(boolean cond, String message) {
+void myAssert(boolean cond, String message) {
     if (!cond) {
         println message
         System.exit(1)
@@ -44,8 +45,7 @@ def myAssert(boolean cond, String message) {
 }
 
 
-def streamDOMSource(Source ds, StreamResult sr) {
-
+void streamDOMSource(Source ds, StreamResult sr) {
     Transformer transformer =
             TransformerFactory.newInstance().newTransformer()
     transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
@@ -57,12 +57,12 @@ def streamDOMSource(Source ds, StreamResult sr) {
     transformer.transform(ds, sr)
 }
 
-def printXMLDocument(Document doc, OutputStream out) {
+void printXMLDocument(Document doc, OutputStream out) {
     streamDOMSource(new DOMSource(doc),
             new StreamResult(new OutputStreamWriter(out, "UTF-8")))
 }
 
-def printSOAPXML(SOAPMessage soapResponse, PrintStream out) {
+void printSOAPXML(SOAPMessage soapResponse, PrintStream out) {
     streamDOMSource(soapResponse.getSOAPPart().getContent(), new StreamResult(out))
 }
 
@@ -74,11 +74,13 @@ String xmlToString(Document doc) {
 }
 
 // Oracles NVL
-String nvl(String val, String ifnull) {
-    val == null || "".equals(val.trim()) ? ifnull : val
-}
+//String nvl(String val, String ifnull) {
+    //val == null || "".equals(val.trim()) ? ifnull : val
+//}
 
 
+// this gets problems unless compiled static (createCell)
+@CompileStatic
 XSSFCell setOrCreateCell(XSSFRow r, int col, String val) {
     XSSFCell c = r.getCell(col)
     if (c == null) {
@@ -92,6 +94,8 @@ XSSFCell setOrCreateCell(XSSFRow r, int col, String val) {
 }
 
 
+// this gets problems unless compiled static (getCellType)
+@CompileStatic
 String getCell(XSSFRow r, int col) {
     XSSFCell c = r.getCell(col)
     if (c == null) {
@@ -116,16 +120,14 @@ Document buildRowDoc(DocumentBuilder docBuilder, XSSFRow r, Properties prop) {
     doc.appendChild(rootElement)
     //rootElement.appendChild(doc.importNode(configXML,true)); // IMPORT the alien XML... DOES NOT WORK??
     // ok, doing it by hand {{{
-
     Element properties = doc.createElement("properties")
     rootElement.appendChild(properties)
-    for (Enumeration e = prop.propertyNames(); e.hasMoreElements()
-            ;) {
-
+    for (Enumeration e = prop.propertyNames(); e.hasMoreElements();) {
+    //(prop.propertyNames() as Enumeration).each { e ->
         String s = (String) e.nextElement()
         Element ent = doc.createElement("entry")
         ent.setAttribute("key", s)
-        ent.setTextContent(prop.getProperty(s))
+        ent.setTextContent(prop."$s")
         properties.appendChild(ent)
     }
     // ok, doing it by hand }}}
@@ -152,16 +154,16 @@ Document buildRowDoc(DocumentBuilder docBuilder, XSSFRow r, Properties prop) {
 
 void processWorksheet(XSSFSheet sheet, Properties prop) {
     TransformerFactory transFact = TransformerFactory.newInstance()
-    ClassLoader classLoader = Excel2WS.getClassLoader()
+    ClassLoader classLoader = this.getClass().getClassLoader()
 
-    Transformer infoTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop.getProperty("info-transform"))))
-    Transformer bodyTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop.getProperty("body-transform"))))
-    Transformer headerTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop.getProperty("header-transform"))))
-    Transformer resultTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop.getProperty("result-transform"))))
+    Transformer infoTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."info-transform")))
+    Transformer bodyTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."body-transform")))
+    Transformer headerTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."header-transform")))
+    Transformer resultTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."result-transform")))
     MessageFactory messageFactory = MessageFactory.newInstance()
 
-    boolean isDebug = "true".equals(prop.getProperty("debug"))
-    String debugFileName = prop.getProperty("debug-file")
+    boolean isDebug = prop.debug == "true"
+    String debugFileName = prop."debug-file"
     PrintStream debugOut
     if (debugFileName != null) {
         debugOut = new PrintStream(new File(debugFileName))
@@ -172,9 +174,9 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
 
 
     String ep
-    String env = prop.getProperty("environment")
+    String env = prop.environment
     debugOut.println("env=" + env)
-    ep = nvl(prop.getProperty("endpoint-" + env), prop.getProperty("endpoint"))
+    ep = prop."endpoint-$env" ?: prop.endpoint
 
     myAssert(ep != null, "Config: environment and/or endpoint must be defined empty")
     debugOut.println("Endpoint: " + ep)
@@ -309,10 +311,12 @@ def loadOverrideProperties(XSSFSheet sheet, Properties prop) {
 
 static void main(String[] args) {
 
-    println("excelwsload by jramb")
+    println("Spreadsheet2WS by jramb")
+    println("https://github.com/jramb/spreadsheet2ws")
+
     String filename
     Properties prop = new Properties()
-    ClassLoader classLoader = Excel2WS.getClassLoader()
+    ClassLoader classLoader = this.getClass().getClassLoader()
     InputStream config =
             classLoader.getResourceAsStream("config.xml") // config.properties?
 
@@ -323,30 +327,30 @@ static void main(String[] args) {
         System.err.println("config.xml not loaded from path")
     }
 
+    //prop.setProperty("now", new Date().format("yyyy-MM-dd"))
+    prop.now = new Date().format("yyyy-MM-dd")
+    prop.uuid = UUID.randomUUID() as String
 
+    if (args.size() == 0) {
+      println '''** You need to specify the spreadsheet to load as the first parameter **
 
+Usage:
+  run filename.xlsx [param=value]*
 
-
-    prop.setProperty("now", new Date().format("yyyy-MM-dd"))
-
-    prop.setProperty("uuid", UUID.randomUUID())
+'''
+      System.exit(-1)
+    }
 
     int i = 0
     if (args.length > 0) {
-        File f = new File(i[])
+        File f = new File(args[i])
         if (f.exists()) {
-            prop.setProperty("excelfile", f.getName())
+            prop.excelfile = f.getName()
             i++
         }
     }
 
-
-
-
-
-
-
-    filename = prop.getProperty("excelfile")
+    filename = prop.excelfile
     println("Starting spreadsheet processing: " + filename)
     File xlsx = new File(filename)
     myAssert(xlsx.canRead(), "File not found: " + xlsx.getName())
@@ -365,7 +369,7 @@ static void main(String[] args) {
     }
 
     // make sure we can write the file by... writing it
-    boolean updateFile = !"false".equals(prop.getProperty("update-file"))
+    boolean updateFile = prop."update-file" != "false"
 
     try {
         if (updateFile) {

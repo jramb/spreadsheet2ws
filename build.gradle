@@ -7,11 +7,11 @@ group = 'net.nogui.tools'
 version = '1.1'
 
 description = "Spreadsheet2WS"
-mainClassName = "xxcust.spread2ws.Excel2WS"
+// Groovy version:
+mainClassName = "Spreadsheet2WS"
+// Java version:
+/*mainClassName = "xxcust.spread2ws.Excel2WS"*/
 /*archivesBaseName = "spreadsheet2ws"*/
-
-/*sourceCompatibility = 1.5*/
-/*targetCompatibility = 1.5*/
 
 repositories {
      maven { url "http://repo.maven.apache.org/maven2" }
@@ -37,6 +37,13 @@ sourceSets {
 
 startScripts {
   classpath += files('../setup')
+  // work-around for https://issues.gradle.org/browse/GRADLE-2333
+  doLast {
+    def windowsScriptFile = file getWindowsScript()
+    def unixScriptFile    = file getUnixScript()
+    windowsScriptFile.text = windowsScriptFile.text.replace('%APP_HOME%\\lib\\setup', '%APP_HOME%\\setup')
+    unixScriptFile.text  = unixScriptFile.text.replace('$APP_HOME/lib/setup', '$APP_HOME/setup')
+  }
 }
 
 distributions {
@@ -44,6 +51,7 @@ distributions {
         baseName = 'spreadsheet2ws'
         contents {
             from { 'LoadExample.xlsx' }
+            from { 'run.bat' }
         }
     }
 }
