@@ -19,7 +19,7 @@ repositories {
 
 dependencies {
     compile group: 'org.apache.poi', name: 'poi-ooxml', version:'3.11'
-    compile 'org.codehaus.groovy:groovy-all:2.4.0'
+    compile 'org.codehaus.groovy:groovy-all:2.4.3'
 }
 
 /*
