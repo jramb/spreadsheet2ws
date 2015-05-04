@@ -151,15 +151,26 @@ Document buildRowDoc(DocumentBuilder docBuilder, XSSFRow r, Properties prop) {
     return doc
 }
 
+Transformer loadTransformer(TransformerFactory transFact, Properties prop, String name) {
+    def styleSheet = prop[prop[name]]
+    //println "StyleSheet=$styleSheet"
+    Transformer transform
+    if (styleSheet == null) {
+        transform = transFact.newTransformer(new StreamSource(Spreadsheet2WS.classLoader.getResourceAsStream(prop[name])))
+    } else {
+        transform = transFact.newTransformer(new StreamSource(new StringReader(styleSheet)))
+    }
+    return transform
+}
 
 void processWorksheet(XSSFSheet sheet, Properties prop) {
     TransformerFactory transFact = TransformerFactory.newInstance()
     ClassLoader classLoader = this.getClass().getClassLoader()
 
-    Transformer infoTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."info-transform")))
-    Transformer bodyTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."body-transform")))
-    Transformer headerTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."header-transform")))
-    Transformer resultTransform = transFact.newTransformer(new StreamSource(classLoader.getResourceAsStream(prop."result-transform")))
+    Transformer infoTransform = loadTransformer(transFact, prop, "info-transform")
+    Transformer bodyTransform = loadTransformer(transFact, prop, "body-transform")
+    Transformer headerTransform = loadTransformer(transFact, prop, "header-transform")
+    Transformer resultTransform = loadTransformer(transFact, prop, "result-transform")
     MessageFactory messageFactory = MessageFactory.newInstance()
 
     boolean isDebug = prop.debug == "true"
@@ -191,7 +202,9 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
     SOAPConnection soapConnection = soapConnectionFactory.createConnection()
 
 
-    for (int i = 0; i <= sheet.getLastRowNum(); i++) {
+    int maxProcess=prop."max-process"?.toInteger()?:1e6
+    debugOut.println "Max lines to process: $maxProcess" 
+    for (int i = 0; i <= sheet.getLastRowNum() && maxProcess>0; i++) {
         XSSFRow r = sheet.getRow(i)
 
         prop.setProperty("rownum", Integer.toString(i))
@@ -202,7 +215,8 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
         String infoStr = inf.toString()
 
         if (!"".equals(infoStr)) {
-            System.out.print("Row " + i + 1 + ": " + infoStr + ": ")
+            maxProcess--;
+            System.out.print("Row " + (i + 1) + ": " + infoStr + ": ")
 
             debugOut.println(i + 1 + ": " + infoStr)
 
@@ -362,7 +376,7 @@ Usage:
 
     // apply args, override all
     for ( /* continue using i */ ; i < args.length; i++) {
-        String[] v = i[].split("=")
+        String[] v = args[i].split("=")
         if (v.length == 2) {
             prop.setProperty(v[0], v[1])
         }
