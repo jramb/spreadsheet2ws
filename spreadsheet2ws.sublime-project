@@ -2,7 +2,18 @@
 	"folders":
 	[
 		{
-			"path": "."
+			"path": ".",
+			"folder_exclude_patterns": ["build"],
+			"name": "Base"
+		}
+	],
+	"build_systems":
+	[
+		{
+			"shell_cmd": "Build Spreadsheet2WS",
+	    // "cmd": ["gradle", "build"],
+		    "shell": "true",
+		    "working_dir": "${project_path}"
 		}
 	]
 }
