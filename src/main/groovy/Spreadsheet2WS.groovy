@@ -2,7 +2,7 @@
  * 2014-2015 by J Ramb, Navigate Consulting
  */
 import groovy.transform.CompileStatic
-import groovy.transform.TypeChecked
+//import groovy.transform.TypeChecked
 
 import javax.xml.parsers.DocumentBuilder
 import javax.xml.parsers.DocumentBuilderFactory
@@ -37,7 +37,7 @@ import org.w3c.dom.NodeList
 import org.w3c.dom.Text
 
 
-void myAssert(boolean cond, String message) {
+static void myAssert(boolean cond, String message) {
     if (!cond) {
         println message
         System.exit(1)
@@ -45,7 +45,7 @@ void myAssert(boolean cond, String message) {
 }
 
 
-void streamDOMSource(Source ds, StreamResult sr) {
+static void streamDOMSource(Source ds, StreamResult sr) {
     Transformer transformer =
             TransformerFactory.newInstance().newTransformer()
     transformer.setOutputProperty(OutputKeys.OMIT_XML_DECLARATION, "yes")
@@ -57,38 +57,33 @@ void streamDOMSource(Source ds, StreamResult sr) {
     transformer.transform(ds, sr)
 }
 
-void printXMLDocument(Document doc, OutputStream out) {
+static void printXMLDocument(Document doc, OutputStream out) {
     streamDOMSource(new DOMSource(doc),
             new StreamResult(new OutputStreamWriter(out, "UTF-8")))
 }
 
-void printSOAPXML(SOAPMessage soapResponse, PrintStream out) {
+static void printSOAPXML(SOAPMessage soapResponse, PrintStream out) {
     streamDOMSource(soapResponse.getSOAPPart().getContent(), new StreamResult(out))
 }
 
 
-String xmlToString(Document doc) {
+static String xmlToString(Document doc) {
     StringWriter sw = new StringWriter()
     streamDOMSource(new DOMSource(doc), new StreamResult(sw))
     return sw.toString()
 }
 
-// Oracles NVL
-//String nvl(String val, String ifnull) {
-    //val == null || "".equals(val.trim()) ? ifnull : val
-//}
-
 
 // this gets problems unless compiled static (createCell)
 @CompileStatic
-XSSFCell setOrCreateCell(XSSFRow r, int col, String val) {
+static XSSFCell setOrCreateCell(XSSFRow r, int col, String val) {
     XSSFCell c = r.getCell(col)
     if (c == null) {
         c = r.createCell(col)
     }
     c.setCellValue(val)
     if (col == 0) {
-        println(val)
+        System.out.println(val)
     }
     return c
 }
@@ -96,7 +91,7 @@ XSSFCell setOrCreateCell(XSSFRow r, int col, String val) {
 
 // this gets problems unless compiled static (getCellType)
 @CompileStatic
-String getCell(XSSFRow r, int col) {
+static String getCell(XSSFRow r, int col) {
     XSSFCell c = r.getCell(col)
     if (c == null) {
         return null
@@ -108,13 +103,15 @@ String getCell(XSSFRow r, int col) {
             return c.getBooleanCellValue() ? "true" : "false"
         case Cell.CELL_TYPE_STRING:
             return c.getStringCellValue()
+        case Cell.CELL_TYPE_FORMULA:
+            return c.getCellFormula()
         default:
             return c.getStringCellValue()
     }
 }
 
 
-Document buildRowDoc(DocumentBuilder docBuilder, XSSFRow r, Properties prop) {
+static Document buildRowDoc(DocumentBuilder docBuilder, XSSFRow r, Properties prop) {
     Document doc = docBuilder.newDocument()
     Element rootElement = doc.createElement("root")
     doc.appendChild(rootElement)
@@ -151,21 +148,24 @@ Document buildRowDoc(DocumentBuilder docBuilder, XSSFRow r, Properties prop) {
     return doc
 }
 
-Transformer loadTransformer(TransformerFactory transFact, Properties prop, String name) {
+static Transformer loadTransformer(TransformerFactory transFact, Properties prop, String name) {
     def styleSheet = prop[prop[name]]
     //println "StyleSheet=$styleSheet"
     Transformer transform
     if (styleSheet == null) {
-        transform = transFact.newTransformer(new StreamSource(Spreadsheet2WS.classLoader.getResourceAsStream(prop[name])))
+        //InputStream istr = this.getClass().classLoader.getResourceAsStream(prop[name]);
+        InputStream istr = Spreadsheet2WS.classLoader.getResourceAsStream(prop[name])
+        assert istr != null, "Could not find resource: ${prop[name]}"
+        transform = transFact.newTransformer(new StreamSource(istr))
     } else {
         transform = transFact.newTransformer(new StreamSource(new StringReader(styleSheet)))
     }
     return transform
 }
 
-void processWorksheet(XSSFSheet sheet, Properties prop) {
+static processWorksheet(XSSFSheet sheet, Properties prop, writeFile) {
     TransformerFactory transFact = TransformerFactory.newInstance()
-    ClassLoader classLoader = this.getClass().getClassLoader()
+    //ClassLoader classLoader = this.getClass().getClassLoader()
 
     Transformer infoTransform = loadTransformer(transFact, prop, "info-transform")
     Transformer bodyTransform = loadTransformer(transFact, prop, "body-transform")
@@ -173,7 +173,9 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
     Transformer resultTransform = loadTransformer(transFact, prop, "result-transform")
     MessageFactory messageFactory = MessageFactory.newInstance()
 
+    def processedLines=0
     boolean isDebug = prop.debug == "true"
+    boolean isVerbose = prop.verbose == "true"
     String debugFileName = prop."debug-file"
     PrintStream debugOut
     if (debugFileName != null) {
@@ -203,8 +205,11 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
 
 
     int maxProcess=prop."max-process"?.toInteger()?:1e6
-    debugOut.println "Max lines to process: $maxProcess" 
-    for (int i = 0; i <= sheet.getLastRowNum() && maxProcess>0; i++) {
+    int maxErrors=prop."max-errors"?.toInteger()?:10
+    int commitEvery = prop."commit-every"?.toInteger()?:100
+
+    debugOut.println "Max lines to process: $maxProcess, max errors: $maxErrors, write every: $commitEvery" 
+    for (int i = 0; i <= sheet.getLastRowNum() && maxProcess>0 && maxErrors>0; i++) {
         XSSFRow r = sheet.getRow(i)
 
         prop.setProperty("rownum", Integer.toString(i))
@@ -223,7 +228,6 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
 
 
             if (isDebug) {
-
                 printXMLDocument(doc, debugOut)
                 DOMResult dr = new DOMResult()
 
@@ -248,15 +252,12 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
                     new DOMResult(soapHdr)
             )
 
-            if (isDebug) {
+            if (isDebug && isVerbose) {
                 printSOAPXML(soapMessage, debugOut)
             }
 
-
-
-
             soapMessage.saveChanges()
-            SOAPMessage soapResponse = null
+            SOAPMessage soapResponse
             try {
                 soapResponse = soapConnection.call(soapMessage, ep)
                 if (isDebug) {
@@ -275,9 +276,10 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
                     printXMLDocument(res, debugOut)
                 }
 
-
-
-
+                if(processedLines++ > commitEvery) {
+                    writeFile()
+                    processedLines = 0
+                }
 
                 if (res != null && res.getDocumentElement() != null) {
                     NodeList cols =
@@ -289,11 +291,13 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
                         setOrCreateCell(r, colnr, cx.getTextContent())
                     }
                 } else {
+                    maxErrors--;
                     setOrCreateCell(r, 0, "ERROR")
                     setOrCreateCell(r, 1, "Result after transformation is empty, check logs")
                 }
             }
             catch (Exception e) {
+                maxErrors--;
                 e.printStackTrace(System.out)
                 println(e.getLocalizedMessage())
                 setOrCreateCell(r, 0, "ERROR")
@@ -304,7 +308,7 @@ void processWorksheet(XSSFSheet sheet, Properties prop) {
 }
 
 
-def loadOverrideProperties(XSSFSheet sheet, Properties prop) {
+static loadOverrideProperties(XSSFSheet sheet, Properties prop) {
     if (sheet == null) {
         return
     }
@@ -315,8 +319,8 @@ def loadOverrideProperties(XSSFSheet sheet, Properties prop) {
         if (r != null) {
             String k = getCell(r, 0)
             String v = getCell(r, 1)
-            if (!"".equals(k)) {
-                prop.setProperty(k, v)
+            if (k != null && k != "" && v != null) {
+                prop[k] = v
             }
         }
     }
@@ -337,8 +341,9 @@ static void main(String[] args) {
     //myAssert(config != null, "Could not find config.xml in path, I need that!");
     if (config != null) {
         prop.loadFromXML(config)
+        System.err.println("Info: config.xml loaded from path")
     } else {
-        System.err.println("config.xml not loaded from path")
+        System.err.println("Info: config.xml not loaded from path")
     }
 
     //prop.setProperty("now", new Date().format("yyyy-MM-dd"))
@@ -367,8 +372,14 @@ Usage:
     filename = prop.excelfile
     println("Starting spreadsheet processing: " + filename)
     File xlsx = new File(filename)
+    File backup = new File(xls.absoulteFile+".bak")
     myAssert(xlsx.canRead(), "File not found: " + xlsx.getName())
     myAssert(xlsx.canWrite(), "File not writeable: " + xlsx.getName())
+    if(updateFile) {
+        if (backup.exists()) {
+          assert backup.delete(), "Could not remove old backup"
+        }
+    }
 
     XSSFWorkbook x = new XSSFWorkbook(new FileInputStream(xlsx))
 
@@ -385,10 +396,27 @@ Usage:
     // make sure we can write the file by... writing it
     boolean updateFile = prop."update-file" != "false"
 
-    try {
-        if (updateFile) {
-            x.write(new FileOutputStream(xlsx))
+    def writeFile = {
+        if(updateFile) {
+            print "Writing file ${xlsx.name}"
+            File tmp = new File(xlsx.absoluteFile+".tmp")
+            //x.write(new FileOutputStream(xlsx))
+            if (!backup.exists()) {
+                assert xlsx.renameTo(backup), "Could not backup file!"
+            }
+            x.write(new FileOutputStream(tmp))
+            if(xlsx.exists()) {
+                assert xlsx.delete(), "Could not delete ${xlsx.name} before replacing"
+            }
+            assert tmp.renameTo(xlsx), "Could not restore written file, see backup ${backup.name}"
+            print "."
         }
+    }
+
+    try {
+        writeFile();
+        //x.write(new FileOutputStream(xlsx))
+
     }
 
     catch (IOException e) {
@@ -397,12 +425,12 @@ Usage:
         System.exit(1)
     }
     try {
-        processWorksheet(x.getSheetAt(0), prop)
+        processWorksheet(x.getSheetAt(0), prop, writeFile )
     }
     finally {
         if (updateFile) {
             println("Updating " + xlsx.getName())
-            x.write(new FileOutputStream(xlsx))
+            writeFile(); //x.write(new FileOutputStream(xlsx))
         }
     }
 
