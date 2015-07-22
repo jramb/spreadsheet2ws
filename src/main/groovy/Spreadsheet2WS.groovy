@@ -369,10 +369,12 @@ Usage:
         }
     }
 
+    boolean updateFile = prop."update-file" != "false"
+
     filename = prop.excelfile
     println("Starting spreadsheet processing: " + filename)
     File xlsx = new File(filename)
-    File backup = new File(xls.absoulteFile+".bak")
+    File backup = new File("${xlsx.absoluteFile}.bak")
     myAssert(xlsx.canRead(), "File not found: " + xlsx.getName())
     myAssert(xlsx.canWrite(), "File not writeable: " + xlsx.getName())
     if(updateFile) {
@@ -393,13 +395,10 @@ Usage:
         }
     }
 
-    // make sure we can write the file by... writing it
-    boolean updateFile = prop."update-file" != "false"
-
     def writeFile = {
         if(updateFile) {
             print "Writing file ${xlsx.name}"
-            File tmp = new File(xlsx.absoluteFile+".tmp")
+            File tmp = new File("${xlsx.absoluteFile}.tmp")
             //x.write(new FileOutputStream(xlsx))
             if (!backup.exists()) {
                 assert xlsx.renameTo(backup), "Could not backup file!"
@@ -409,17 +408,16 @@ Usage:
                 assert xlsx.delete(), "Could not delete ${xlsx.name} before replacing"
             }
             assert tmp.renameTo(xlsx), "Could not restore written file, see backup ${backup.name}"
-            print "."
+            println "."
         }
     }
 
+    // make sure we can write the file by... writing it
     try {
         writeFile();
         //x.write(new FileOutputStream(xlsx))
-
     }
-
-    catch (IOException e) {
+    catch (Exception e) {
         println("Can not write to " + filename)
         println("Maybe you need to close the file in Excel?")
         System.exit(1)
@@ -429,14 +427,12 @@ Usage:
     }
     finally {
         if (updateFile) {
-            println("Updating " + xlsx.getName())
+            //println("Updating " + xlsx.getName())
             writeFile(); //x.write(new FileOutputStream(xlsx))
         }
     }
 
     println "Done."
 }
-
-
 
 
